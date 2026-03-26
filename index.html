@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Multi-Everything</title>
-<!-- TensorFlow.js + COCO-SSD for REAL object detection -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<!-- TensorFlow.js + COCO-SSD loaded dynamically with fallbacks -->
 <style>
 :root {
   --bg: #0f0f1a;
@@ -306,20 +304,56 @@ const scanStatus = document.getElementById('scanStatus');
 const legend = document.getElementById('legend');
 const selectAllBtn = document.getElementById('selectAllBtn');
 
+// ===================== DYNAMIC SCRIPT LOADER WITH FALLBACKS =====================
+function loadScript(urls) {
+  // urls is an array of fallback URLs to try in order
+  return new Promise((resolve, reject) => {
+    let idx = 0;
+    function tryNext() {
+      if (idx >= urls.length) { reject(new Error('All CDN sources failed')); return; }
+      const script = document.createElement('script');
+      script.src = urls[idx];
+      script.crossOrigin = 'anonymous';
+      script.onload = resolve;
+      script.onerror = () => { idx++; tryNext(); };
+      document.head.appendChild(script);
+    }
+    tryNext();
+  });
+}
+
 // ===================== LOAD MODEL =====================
 async function loadModel() {
   try {
-    modelStatus.textContent = 'Loading AI model... (downloading ~5MB, please wait)';
+    modelStatus.textContent = 'Loading AI scripts... (step 1/2)';
     modelStatus.className = 'model-status loading';
+
+    // Load TensorFlow.js with fallback CDNs
+    await loadScript([
+      'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+      'https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.17.0/tf.min.js'
+    ]);
+
+    modelStatus.textContent = 'Loading AI model... (step 2/2, ~5MB)';
+
+    // Load COCO-SSD with fallback CDNs
+    await loadScript([
+      'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+      'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js'
+    ]);
+
+    // Now load the actual model
+    modelStatus.textContent = 'Initializing AI brain... (almost done)';
     model = await cocoSsd.load();
     modelStatus.textContent = 'AI model ready! Upload an image and scan.';
     modelStatus.className = 'model-status ready';
     modelLoading = false;
     setTimeout(() => { modelStatus.style.display = 'none'; }, 3000);
   } catch (err) {
-    modelStatus.textContent = 'Failed to load AI model. Check your internet connection and refresh.';
-    modelStatus.className = 'model-status error';
     console.error('Model load error:', err);
+    modelStatus.innerHTML = 'Failed to load AI model. <button onclick="location.reload()" style="background:#7c3aed;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;margin-left:8px">Retry</button>';
+    modelStatus.className = 'model-status error';
   }
 }
 loadModel();
