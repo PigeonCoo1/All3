@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Everything</title>
+<style>
+:root {
+  --bg: #0f0f1a;
+  --card: #1a1a2e;
+  --card2: #22223a;
+  --accent: #7c3aed;
+  --accent2: #a78bfa;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --red: #ef4444;
+  --border: #2d2d4a;
+  --radius: 12px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* NAV */
+.navbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; height: 60px; position: sticky; top: 0; z-index: 100; }
+.navbar h1 { font-size: 1.3rem; background: linear-gradient(135deg, var(--accent), #e879f9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-right: 32px; white-space: nowrap; }
+.tabs { display: flex; gap: 4px; }
+.tab-btn { background: none; border: none; color: var(--text2); padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; transition: all 0.2s; }
+.tab-btn:hover { background: var(--card2); color: var(--text); }
+.tab-btn.active { background: var(--accent); color: #fff; }
+
+/* PANELS */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* FINDER-CAM LAYOUT */
+.finder-cam { display: grid; grid-template-columns: 1fr 380px; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; min-height: calc(100vh - 60px); }
+@media (max-width: 900px) { .finder-cam { grid-template-columns: 1fr; } }
+
+/* LEFT SIDE */
+.media-section { display: flex; flex-direction: column; gap: 16px; }
+
+/* UPLOAD ZONE */
+.upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--card); min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(124,58,237,0.08); }
+.upload-zone svg { width: 48px; height: 48px; stroke: var(--accent2); margin-bottom: 12px; }
+.upload-zone p { color: var(--text2); }
+.upload-zone .big { font-size: 1.1rem; color: var(--text); margin-bottom: 4px; }
+
+/* CANVAS CONTAINER */
+.canvas-container { position: relative; background: var(--card); border-radius: var(--radius); overflow: hidden; display: none; }
+.canvas-container canvas { display: block; width: 100%; height: auto; }
+.canvas-container video { display: block; width: 100%; border-radius: var(--radius); }
+.media-controls { display: flex; gap: 8px; padding: 10px; background: var(--card2); }
+.media-controls button { background: var(--accent); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+.media-controls button:hover { opacity: 0.85; }
+
+/* RESULTS */
+.results-panel { background: var(--card); border-radius: var(--radius); padding: 16px; display: none; }
+.results-panel h3 { margin-bottom: 12px; font-size: 1rem; }
+.result-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.result-item:last-child { border-bottom: none; }
+.conf-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.conf-bar { height: 6px; border-radius: 3px; flex: 1; max-width: 120px; }
+.conf-text { font-size: 0.85rem; color: var(--text2); min-width: 40px; text-align: right; }
+.result-name { font-size: 0.9rem; min-width: 100px; }
+.not-found { opacity: 0.4; }
+
+/* RIGHT SIDE - CHECKLIST */
+.checklist-section { background: var(--card); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 100px); position: sticky; top: 80px; }
+.checklist-section h2 { font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+.selected-count { background: var(--accent); color: #fff; font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; }
+
+/* SEARCH */
+.search-box { position: relative; }
+.search-box input { width: 100%; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 10px 36px; color: var(--text); font-size: 0.9rem; outline: none; }
+.search-box input:focus { border-color: var(--accent); }
+.search-box svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; stroke: var(--text2); }
+
+/* ITEM LIST */
+.item-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.item-list::-webkit-scrollbar { width: 6px; }
+.item-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.category-group { margin-bottom: 8px; }
+.category-header { font-size: 0.8rem; color: var(--accent2); text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 4px 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; user-select: none; }
+.category-header .arrow { transition: transform 0.2s; font-size: 0.7rem; }
+.category-header.collapsed .arrow { transform: rotate(-90deg); }
+.category-items { display: flex; flex-direction: column; }
+.category-header.collapsed + .category-items { display: none; }
+.item-check { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.15s; font-size: 0.88rem; }
+.item-check:hover { background: var(--card2); }
+.item-check input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+.item-check.hidden { display: none; }
+
+/* CUSTOM INPUT */
+.custom-input { display: flex; gap: 8px; }
+.custom-input input { flex: 1; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 0.9rem; outline: none; }
+.custom-input input:focus { border-color: var(--accent); }
+.custom-input button { background: var(--accent); color: #fff; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; white-space: nowrap; }
+
+/* SCAN BUTTON */
+.scan-btn { background: linear-gradient(135deg, var(--accent), #e879f9); color: #fff; border: none; padding: 14px; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.1s; }
+.scan-btn:hover { opacity: 0.9; }
+.scan-btn:active { transform: scale(0.98); }
+.scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* LOADING BAR */
+.loading-bar { height: 4px; background: var(--card2); border-radius: 2px; overflow: hidden; display: none; }
+.loading-bar.active { display: block; }
+.loading-bar .fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #e879f9, var(--accent)); border-radius: 2px; transition: width 0.1s; }
+
+/* COMING SOON */
+.coming-soon { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 60px); padding: 20px; }
+.coming-soon-card { background: var(--card); border-radius: 20px; padding: 60px 48px; text-align: center; max-width: 500px; }
+.coming-soon-card .icon { font-size: 4rem; margin-bottom: 16px; }
+.coming-soon-card h2 { font-size: 1.8rem; margin-bottom: 8px; }
+.coming-soon-card p { color: var(--text2); font-size: 1.05rem; }
+
+/* CLEAR BTN */
+.clear-btn { background: var(--card2); color: var(--text2); border: 1px solid var(--border); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+.clear-btn:hover { color: var(--text); border-color: var(--text2); }
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <h1>Multi-Everything</h1>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="finder-cam">Finder-Cam</button>
+    <button class="tab-btn" data-tab="coming-soon">Feature #2</button>
+  </div>
+</nav>
+
+<!-- TAB 1: FINDER-CAM -->
+<div id="tab-finder-cam" class="tab-panel active">
+  <div class="finder-cam">
+    <!-- LEFT: Media -->
+    <div class="media-section">
+      <div class="upload-zone" id="uploadZone">
+        <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p class="big">Drop photos or videos here</p>
+        <p>or click to browse</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*,video/*" hidden>
+
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="mainCanvas"></canvas>
+        <video id="mainVideo" hidden controls></video>
+        <div class="media-controls" id="mediaControls" style="display:none">
+          <button id="captureFrameBtn">Capture This Frame</button>
+          <button class="clear-btn" id="clearMediaBtn">Remove Media</button>
+        </div>
+      </div>
+      <div class="media-controls" id="imgControls" style="display:none">
+        <button class="clear-btn" id="clearMediaBtn2">Remove Media</button>
+      </div>
+
+      <div class="loading-bar" id="loadingBar"><div class="fill" id="loadingFill"></div></div>
+
+      <div class="results-panel" id="resultsPanel">
+        <h3>Detection Results</h3>
+        <div id="resultsList"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Checklist -->
+    <div class="checklist-section">
+      <h2>Find These Items <span class="selected-count" id="selectedCount">0 selected</span></h2>
+      <div class="search-box">
+        <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+        <input type="text" id="searchInput" placeholder="Search items...">
+      </div>
+      <div class="item-list" id="itemList"></div>
+      <div class="custom-input">
+        <input type="text" id="customItemInput" placeholder="Can't find it? Type anything...">
+        <button id="addCustomBtn">+ Add</button>
+      </div>
+      <button class="scan-btn" id="scanBtn">Scan Image</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: COMING SOON -->
+<div id="tab-coming-soon" class="tab-panel">
+  <div class="coming-soon">
+    <div class="coming-soon-card">
+      <div class="icon">🚀</div>
+      <h2>Coming Soon!</h2>
+      <p>Something awesome is in the works. Stay tuned for the next Multi-Everything feature!</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== DATA =====================
+const ITEM_DATABASE = [
+  { category: "Animals", items: ["Dog","Cat","Bird","Fish","Horse","Cow","Sheep","Goat","Pig","Chicken","Duck","Rabbit","Deer","Bear","Wolf","Fox","Squirrel","Mouse","Rat","Frog","Snake","Turtle","Lizard","Butterfly","Bee","Spider","Ant","Eagle","Hawk","Owl","Parrot","Penguin","Dolphin","Whale","Shark","Octopus","Crab","Lobster","Jellyfish","Starfish"] },
+  { category: "Plants & Trees", items: ["Oak Tree","Pine Tree","Palm Tree","Maple Tree","Birch Tree","Willow Tree","Cactus","Fern","Moss","Ivy","Rose","Sunflower","Daisy","Tulip","Lily","Orchid","Dandelion","Grass","Wheat","Corn","Bamboo","Mushroom","Seaweed","Vine","Bush","Hedge","Flower Pot","Succulent","Lavender","Wildflower"] },
+  { category: "Rocks & Minerals", items: ["Granite","Quartz","Obsidian","Sandstone","Limestone","Marble","Slate","Basalt","Pebble","Boulder","Gravel","Crystal","Geode","Amethyst","Ruby","Emerald","Sapphire","Diamond","Gold Nugget","Fossil","Coral","Pumice","Chalk","Flint","Iron Ore"] },
+  { category: "Vehicles", items: ["Car","Truck","SUV","Van","Bus","Motorcycle","Bicycle","Scooter","Skateboard","Train","Airplane","Helicopter","Boat","Ship","Canoe","Kayak","Jet Ski","ATV","Tractor","Ambulance","Fire Truck","Police Car","Taxi","Limousine","RV","Golf Cart","Segway","Hot Air Balloon"] },
+  { category: "Furniture", items: ["Chair","Table","Desk","Sofa","Couch","Bed","Nightstand","Dresser","Bookshelf","Cabinet","Wardrobe","Bench","Stool","Rocking Chair","Ottoman","Coffee Table","Dining Table","TV Stand","Filing Cabinet","Hammock","Bean Bag","Crib","Bunk Bed","Futon"] },
+  { category: "Electronics", items: ["Laptop","Desktop Computer","Phone","Tablet","Television","Monitor","Keyboard","Mouse","Headphones","Speaker","Camera","Microphone","Printer","Router","Game Console","Remote Control","Smartwatch","Drone","Projector","USB Drive","Hard Drive","Charger","Power Strip","Lamp","Flashlight"] },
+  { category: "Food & Drinks", items: ["Apple","Banana","Orange","Grape","Strawberry","Watermelon","Pineapple","Mango","Lemon","Avocado","Tomato","Potato","Carrot","Broccoli","Pizza","Hamburger","Hot Dog","Sandwich","Taco","Sushi","Bread","Cake","Cookie","Ice Cream","Donut","Coffee Cup","Water Bottle","Soda Can","Wine Glass","Beer Bottle","Juice Box","Bowl of Soup","Salad","Pasta","Rice","Egg","Cheese","Popcorn"] },
+  { category: "Clothing & Accessories", items: ["T-Shirt","Jacket","Hoodie","Coat","Sweater","Dress","Skirt","Jeans","Shorts","Suit","Hat","Baseball Cap","Beanie","Scarf","Gloves","Socks","Sneakers","Boots","Sandals","High Heels","Sunglasses","Watch","Necklace","Ring","Bracelet","Earrings","Belt","Tie","Backpack","Purse","Wallet","Umbrella"] },
+  { category: "Tools & Hardware", items: ["Hammer","Screwdriver","Wrench","Pliers","Saw","Drill","Tape Measure","Level","Ladder","Axe","Shovel","Rake","Wheelbarrow","Paintbrush","Paint Roller","Bucket","Toolbox","Nails","Screws","Bolts","Duct Tape","Rope","Chain","Wire","Clamp"] },
+  { category: "Sports & Outdoors", items: ["Basketball","Soccer Ball","Football","Baseball","Tennis Ball","Golf Ball","Volleyball","Bowling Ball","Tennis Racket","Baseball Bat","Golf Club","Hockey Stick","Surfboard","Snowboard","Skis","Ice Skates","Roller Skates","Trampoline","Tent","Sleeping Bag","Fishing Rod","Kayak Paddle","Dumbbells","Jump Rope","Yoga Mat","Swimming Pool","Frisbee"] },
+  { category: "Buildings & Structures", items: ["House","Apartment Building","Skyscraper","Church","Castle","Barn","Garage","Shed","Bridge","Tower","Lighthouse","Windmill","Dam","Fence","Gate","Wall","Statue","Fountain","Playground","Stadium","Parking Lot","Gas Station","Hospital","School","Library","Museum"] },
+  { category: "Household Items", items: ["Pillow","Blanket","Towel","Rug","Curtain","Mirror","Clock","Vase","Candle","Picture Frame","Book","Magazine","Newspaper","Pen","Pencil","Scissors","Tape","Glue","Paper","Envelope","Key","Lock","Door","Window","Fan","Heater","Trash Can","Broom","Mop","Vacuum"] },
+  { category: "Kitchen Items", items: ["Plate","Bowl","Cup","Mug","Glass","Fork","Knife","Spoon","Pan","Pot","Cutting Board","Blender","Toaster","Microwave","Oven","Refrigerator","Dishwasher","Sink","Faucet","Bottle Opener","Can Opener","Spatula","Whisk","Colander","Kettle","Coffee Maker","Napkin","Paper Towel","Sponge"] },
+  { category: "Nature & Landscape", items: ["Mountain","Hill","Valley","River","Lake","Ocean","Waterfall","Beach","Sand","Cloud","Rainbow","Sun","Moon","Stars","Snow","Ice","Mud","Dirt","Field","Meadow","Forest","Jungle","Desert","Swamp","Island","Cave","Cliff","Volcano","Glacier","Horizon"] },
+  { category: "People & Body Parts", items: ["Person","Man","Woman","Child","Baby","Face","Hand","Foot","Eye","Ear","Nose","Mouth","Hair","Arm","Leg","Group of People","Crowd","Skeleton","Shadow","Silhouette"] },
+  { category: "Signs & Text", items: ["Stop Sign","Street Sign","Speed Limit Sign","Exit Sign","Warning Sign","Billboard","Banner","Flag","Logo","Graffiti","License Plate","Barcode","QR Code","Label","Price Tag","Poster","Menu","Map","Calendar","Newspaper Headline"] },
+  { category: "Music & Instruments", items: ["Guitar","Piano","Drums","Violin","Trumpet","Flute","Saxophone","Microphone Stand","Amplifier","Record Player","Vinyl Record","CD","Music Note","Sheet Music","Headphones","Speaker System","Ukulele","Harmonica","Accordion","Tambourine"] },
+  { category: "Toys & Games", items: ["Teddy Bear","Doll","Action Figure","LEGO","Puzzle","Board Game","Playing Cards","Dice","Toy Car","Ball","Kite","Yo-Yo","Rubik's Cube","Stuffed Animal","Balloon","Toy Soldier","Spinning Top","Slinky","Crayons","Coloring Book"] }
+];
+
+// ===================== STATE =====================
+let selectedItems = new Set();
+let uploadedImage = null;
+let uploadedVideo = null;
+let isVideo = false;
+let detectionResults = [];
+let customItems = [];
+
+// ===================== DOM =====================
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const canvasContainer = document.getElementById('canvasContainer');
+const mainCanvas = document.getElementById('mainCanvas');
+const mainVideo = document.getElementById('mainVideo');
+const mediaControls = document.getElementById('mediaControls');
+const imgControls = document.getElementById('imgControls');
+const ctx = mainCanvas.getContext('2d');
+const searchInput = document.getElementById('searchInput');
+const itemList = document.getElementById('itemList');
+const customItemInput = document.getElementById('customItemInput');
+const addCustomBtn = document.getElementById('addCustomBtn');
+const scanBtn = document.getElementById('scanBtn');
+const loadingBar = document.getElementById('loadingBar');
+const loadingFill = document.getElementById('loadingFill');
+const resultsPanel = document.getElementById('resultsPanel');
+const resultsList = document.getElementById('resultsList');
+const selectedCount = document.getElementById('selectedCount');
+
+// ===================== TABS =====================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ===================== FILE UPLOAD =====================
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(file) {
+  clearResults();
+  const url = URL.createObjectURL(file);
+
+  if (file.type.startsWith('video/')) {
+    isVideo = true;
+    mainVideo.src = url;
+    mainVideo.hidden = false;
+    mainCanvas.hidden = true;
+    mediaControls.style.display = 'flex';
+    imgControls.style.display = 'none';
+    canvasContainer.style.display = 'block';
+    uploadZone.style.display = 'none';
+    uploadedVideo = mainVideo;
+    uploadedImage = null;
+  } else {
+    isVideo = false;
+    const img = new Image();
+    img.onload = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const maxW = canvasContainer.clientWidth || 800;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxW) { h = h * (maxW / w); w = maxW; }
+      mainCanvas.width = w * dpr;
+      mainCanvas.height = h * dpr;
+      mainCanvas.style.width = w + 'px';
+      mainCanvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.drawImage(img, 0, 0, w, h);
+      uploadedImage = { img, w, h };
+      mainCanvas.hidden = false;
+      mainVideo.hidden = true;
+      mediaControls.style.display = 'none';
+      imgControls.style.display = 'flex';
+      canvasContainer.style.display = 'block';
+      uploadZone.style.display = 'none';
+    };
+    img.src = url;
+    uploadedVideo = null;
+  }
+}
+
+document.getElementById('captureFrameBtn').addEventListener('click', () => {
+  if (!uploadedVideo) return;
+  const v = uploadedVideo;
+  const dpr = window.devicePixelRatio || 1;
+  const maxW = canvasContainer.clientWidth || 800;
+  let w = v.videoWidth, h = v.videoHeight;
+  if (w > maxW) { h = h * (maxW / w); w = maxW; }
+  mainCanvas.width = w * dpr;
+  mainCanvas.height = h * dpr;
+  mainCanvas.style.width = w + 'px';
+  mainCanvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.drawImage(v, 0, 0, w, h);
+  mainCanvas.hidden = false;
+  mainVideo.hidden = true;
+  mediaControls.style.display = 'flex';
+  uploadedImage = { img: null, w, h, isFrame: true };
+});
+
+function clearMedia() {
+  uploadedImage = null;
+  uploadedVideo = null;
+  isVideo = false;
+  mainVideo.src = '';
+  canvasContainer.style.display = 'none';
+  uploadZone.style.display = 'flex';
+  mediaControls.style.display = 'none';
+  imgControls.style.display = 'none';
+  clearResults();
+  fileInput.value = '';
+}
+document.getElementById('clearMediaBtn').addEventListener('click', clearMedia);
+document.getElementById('clearMediaBtn2').addEventListener('click', clearMedia);
+
+// ===================== CHECKLIST =====================
+function renderChecklist() {
+  const filter = searchInput.value.toLowerCase();
+  itemList.innerHTML = '';
+
+  // Custom items first if any
+  const allCustom = customItems.filter(it => it.toLowerCase().includes(filter));
+  if (allCustom.length > 0) {
+    const group = document.createElement('div');
+    group.className = 'category-group';
+    const hdr = document.createElement('div');
+    hdr.className = 'category-header';
+    hdr.innerHTML = '<span class="arrow">▼</span> Custom Items';
+    hdr.addEventListener('click', () => { hdr.classList.toggle('collapsed'); });
+    group.appendChild(hdr);
+    const items = document.createElement('div');
+    items.className = 'category-items';
+    allCustom.forEach(name => {
+      items.appendChild(makeCheckbox(name));
+    });
+    group.appendChild(items);
+    itemList.appendChild(group);
+  }
+
+  ITEM_DATABASE.forEach(cat => {
+    const filtered = cat.items.filter(it => it.toLowerCase().includes(filter));
+    if (filtered.length === 0 && !cat.category.toLowerCase().includes(filter)) return;
+    const show = filtered.length > 0 ? filtered : cat.items;
+
+    const group = document.createElement('div');
+    group.className = 'category-group';
+    const hdr = document.createElement('div');
+    hdr.className = 'category-header';
+    hdr.innerHTML = `<span class="arrow">▼</span> ${cat.category} (${show.length})`;
+    hdr.addEventListener('click', () => { hdr.classList.toggle('collapsed'); });
+    group.appendChild(hdr);
+    const items = document.createElement('div');
+    items.className = 'category-items';
+    show.forEach(name => {
+      items.appendChild(makeCheckbox(name));
+    });
+    group.appendChild(items);
+    itemList.appendChild(group);
+  });
+}
+
+function makeCheckbox(name) {
+  const label = document.createElement('label');
+  label.className = 'item-check';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = selectedItems.has(name);
+  cb.addEventListener('change', () => {
+    if (cb.checked) selectedItems.add(name);
+    else selectedItems.delete(name);
+    updateCount();
+  });
+  label.appendChild(cb);
+  label.appendChild(document.createTextNode(name));
+  return label;
+}
+
+function updateCount() {
+  selectedCount.textContent = selectedItems.size + ' selected';
+}
+
+searchInput.addEventListener('input', renderChecklist);
+
+addCustomBtn.addEventListener('click', () => {
+  const val = customItemInput.value.trim();
+  if (!val) return;
+  if (!customItems.includes(val)) customItems.push(val);
+  selectedItems.add(val);
+  customItemInput.value = '';
+  updateCount();
+  renderChecklist();
+});
+customItemInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCustomBtn.click(); });
+
+// ===================== DETECTION SIMULATION =====================
+function simulateDetection(items, w, h) {
+  const results = [];
+  const boxes = [];
+
+  items.forEach(name => {
+    // ~75% chance of detection
+    const found = Math.random() < 0.75;
+    if (!found) {
+      results.push({ name, found: false, confidence: 0, box: null });
+      return;
+    }
+
+    // Confidence weighted toward higher values
+    const raw = Math.pow(Math.random(), 0.6) * 100;
+    const confidence = Math.max(5, Math.round(raw));
+
+    // Generate bounding box
+    const boxW = (0.08 + Math.random() * 0.18) * w;
+    const boxH = (0.08 + Math.random() * 0.18) * h;
+    let bx, by, attempts = 0;
+    do {
+      bx = Math.random() * (w - boxW);
+      by = Math.random() * (h - boxH - 20) + 20; // leave room for label
+      attempts++;
+    } while (attempts < 10 && boxes.some(b => boxOverlap(bx, by, boxW, boxH, b.x, b.y, b.w, b.h)));
+
+    const box = { x: bx, y: by, w: boxW, h: boxH };
+    boxes.push(box);
+    results.push({ name, found: true, confidence, box });
+  });
+
+  return results;
+}
+
+function boxOverlap(x1,y1,w1,h1,x2,y2,w2,h2) {
+  return !(x1+w1 < x2 || x2+w2 < x1 || y1+h1 < y2 || y2+h2 < y1);
+}
+
+function getConfidenceColor(c) {
+  if (c === 100) return var_green;
+  if (c >= 50) return var_yellow;
+  return var_red;
+}
+const var_green = '#22c55e';
+const var_yellow = '#eab308';
+const var_red = '#ef4444';
+
+function drawBoundingBoxes(results) {
+  if (!uploadedImage) return;
+  const { w, h, img, isFrame } = uploadedImage;
+  const dpr = window.devicePixelRatio || 1;
+
+  // Redraw base image
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (!isFrame && img) {
+    ctx.drawImage(img, 0, 0, w, h);
+  }
+
+  results.forEach(r => {
+    if (!r.found || !r.box) return;
+    const color = getConfidenceColor(r.confidence);
+    const b = r.box;
+
+    // Draw box
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+
+    // Draw label background
+    const label = `${r.name} (${r.confidence}%)`;
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    const textW = ctx.measureText(label).width + 10;
+    const textH = 22;
+    const lx = b.x;
+    const ly = b.y - textH - 2;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(lx, ly, textW, textH, 4);
+    ctx.fill();
+
+    // Draw label text
+    ctx.fillStyle = '#000';
+    ctx.fillText(label, lx + 5, ly + 15);
+  });
+}
+
+function renderResultsSummary(results) {
+  resultsPanel.style.display = 'block';
+  resultsList.innerHTML = '';
+
+  // Sort: found first, then by confidence desc
+  const sorted = [...results].sort((a, b) => {
+    if (a.found !== b.found) return b.found - a.found;
+    return b.confidence - a.confidence;
+  });
+
+  sorted.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'result-item' + (r.found ? '' : ' not-found');
+
+    if (r.found) {
+      const color = getConfidenceColor(r.confidence);
+      div.innerHTML = `
+        <span class="conf-dot" style="background:${color}"></span>
+        <span class="result-name">${r.name}</span>
+        <div class="conf-bar" style="background:${color}33"><div style="width:${r.confidence}%;height:100%;background:${color};border-radius:3px"></div></div>
+        <span class="conf-text">${r.confidence}%</span>
+      `;
+    } else {
+      div.innerHTML = `
+        <span class="conf-dot" style="background:#555"></span>
+        <span class="result-name">${r.name}</span>
+        <span class="conf-text" style="flex:1;text-align:left;color:#666">Not detected</span>
+      `;
+    }
+    resultsList.appendChild(div);
+  });
+}
+
+function clearResults() {
+  detectionResults = [];
+  resultsPanel.style.display = 'none';
+  resultsList.innerHTML = '';
+}
+
+// ===================== SCAN =====================
+scanBtn.addEventListener('click', () => {
+  if (!uploadedImage) { alert('Please upload an image or capture a video frame first!'); return; }
+  if (selectedItems.size === 0) { alert('Please select at least one item to find!'); return; }
+
+  scanBtn.disabled = true;
+  loadingBar.classList.add('active');
+  loadingFill.style.width = '0%';
+  clearResults();
+
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += Math.random() * 15 + 5;
+    if (progress > 95) progress = 95;
+    loadingFill.style.width = progress + '%';
+  }, 100);
+
+  setTimeout(() => {
+    clearInterval(interval);
+    loadingFill.style.width = '100%';
+
+    setTimeout(() => {
+      loadingBar.classList.remove('active');
+      const { w, h } = uploadedImage;
+      detectionResults = simulateDetection([...selectedItems], w, h);
+      drawBoundingBoxes(detectionResults);
+      renderResultsSummary(detectionResults);
+      scanBtn.disabled = false;
+    }, 300);
+  }, 1500);
+});
+
+// ===================== INIT =====================
+renderChecklist();
+</script>
+</body>
+</html>
