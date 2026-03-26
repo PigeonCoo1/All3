@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Everything</title>
+<!-- TensorFlow.js + COCO-SSD loaded dynamically with fallbacks -->
+<style>
+:root {
+  --bg: #0f0f1a;
+  --card: #1a1a2e;
+  --card2: #22223a;
+  --accent: #7c3aed;
+  --accent2: #a78bfa;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --red: #ef4444;
+  --border: #2d2d4a;
+  --radius: 12px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* NAV */
+.navbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 16px; display: flex; align-items: center; height: 56px; position: sticky; top: 0; z-index: 100; }
+.navbar h1 { font-size: 1.2rem; background: linear-gradient(135deg, var(--accent), #e879f9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-right: 20px; white-space: nowrap; }
+.tabs { display: flex; gap: 4px; }
+.tab-btn { background: none; border: none; color: var(--text2); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+.tab-btn:hover { background: var(--card2); color: var(--text); }
+.tab-btn.active { background: var(--accent); color: #fff; }
+
+/* PANELS */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* MODEL STATUS */
+.model-status { padding: 10px 16px; text-align: center; font-size: 0.85rem; }
+.model-status.loading { background: #1e1b4b; color: var(--accent2); }
+.model-status.ready { background: #052e16; color: var(--green); }
+.model-status.error { background: #450a0a; color: var(--red); }
+
+/* FINDER-CAM LAYOUT */
+.finder-cam { display: flex; flex-direction: column; gap: 16px; padding: 16px; max-width: 800px; margin: 0 auto; }
+@media (min-width: 900px) {
+  .finder-cam { display: grid; grid-template-columns: 1fr 360px; max-width: 1400px; gap: 20px; padding: 20px; }
+}
+
+/* UPLOAD ZONE */
+.upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--card); min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(124,58,237,0.08); }
+.upload-zone svg { width: 44px; height: 44px; stroke: var(--accent2); margin-bottom: 10px; }
+.upload-zone p { color: var(--text2); }
+.upload-zone .big { font-size: 1.05rem; color: var(--text); margin-bottom: 4px; }
+
+/* CANVAS CONTAINER */
+.canvas-container { position: relative; background: var(--card); border-radius: var(--radius); overflow: hidden; display: none; }
+.canvas-container canvas { display: block; width: 100%; height: auto; }
+.canvas-container video { display: block; width: 100%; border-radius: var(--radius); }
+.media-controls { display: flex; gap: 8px; padding: 10px; background: var(--card2); flex-wrap: wrap; }
+.media-controls button { background: var(--accent); color: #fff; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+.media-controls button:hover { opacity: 0.85; }
+
+/* RESULTS */
+.results-panel { background: var(--card); border-radius: var(--radius); padding: 16px; display: none; }
+.results-panel h3 { margin-bottom: 12px; font-size: 1rem; }
+.result-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.result-item:last-child { border-bottom: none; }
+.conf-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.conf-bar { height: 6px; border-radius: 3px; flex: 1; max-width: 120px; }
+.conf-text { font-size: 0.85rem; color: var(--text2); min-width: 40px; text-align: right; }
+.result-name { font-size: 0.9rem; min-width: 80px; }
+.not-found { opacity: 0.4; }
+
+/* RIGHT SIDE - CHECKLIST */
+.checklist-section { background: var(--card); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+@media (min-width: 900px) {
+  .checklist-section { max-height: calc(100vh - 100px); position: sticky; top: 76px; }
+}
+.checklist-section h2 { font-size: 1.05rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.selected-count { background: var(--accent); color: #fff; font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; }
+.select-all-btn { background: var(--card2); color: var(--text2); border: 1px solid var(--border); padding: 3px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; margin-left: auto; }
+
+/* SEARCH */
+.search-box { position: relative; }
+.search-box input { width: 100%; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 10px 36px; color: var(--text); font-size: 0.9rem; outline: none; }
+.search-box input:focus { border-color: var(--accent); }
+.search-box svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; stroke: var(--text2); }
+
+/* ITEM LIST */
+.item-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; max-height: 45vh; }
+@media (min-width: 900px) { .item-list { max-height: none; } }
+.item-list::-webkit-scrollbar { width: 6px; }
+.item-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.category-group { margin-bottom: 6px; }
+.category-header { font-size: 0.78rem; color: var(--accent2); text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 4px 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; user-select: none; }
+.category-header .arrow { transition: transform 0.2s; font-size: 0.7rem; }
+.category-header.collapsed .arrow { transform: rotate(-90deg); }
+.category-items { display: flex; flex-direction: column; }
+.category-header.collapsed + .category-items { display: none; }
+.item-check { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.15s; font-size: 0.88rem; }
+.item-check:hover { background: var(--card2); }
+.item-check input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
+/* CUSTOM INPUT */
+.custom-input { display: flex; gap: 8px; }
+.custom-input input { flex: 1; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 0.9rem; outline: none; }
+.custom-input input:focus { border-color: var(--accent); }
+.custom-input button { background: var(--accent); color: #fff; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; white-space: nowrap; }
+
+/* INFO TEXT */
+.info-text { font-size: 0.78rem; color: var(--text2); line-height: 1.4; padding: 6px 0; border-top: 1px solid var(--border); }
+
+/* SCAN BUTTON */
+.scan-btn { background: linear-gradient(135deg, var(--accent), #e879f9); color: #fff; border: none; padding: 14px; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.1s; }
+.scan-btn:hover { opacity: 0.9; }
+.scan-btn:active { transform: scale(0.98); }
+.scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* LOADING BAR */
+.loading-bar { height: 4px; background: var(--card2); border-radius: 2px; overflow: hidden; display: none; }
+.loading-bar.active { display: block; }
+.loading-bar .fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #e879f9, var(--accent)); border-radius: 2px; transition: width 0.3s; }
+
+/* SCAN STATUS TEXT */
+.scan-status { font-size: 0.85rem; color: var(--accent2); text-align: center; display: none; padding: 8px; }
+
+/* COMING SOON */
+.coming-soon { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 56px); padding: 20px; }
+.coming-soon-card { background: var(--card); border-radius: 20px; padding: 50px 40px; text-align: center; max-width: 500px; }
+.coming-soon-card .icon { font-size: 3.5rem; margin-bottom: 16px; }
+.coming-soon-card h2 { font-size: 1.6rem; margin-bottom: 8px; }
+.coming-soon-card p { color: var(--text2); font-size: 1rem; }
+
+/* CLEAR BTN */
+.clear-btn { background: var(--card2) !important; color: var(--text2) !important; border: 1px solid var(--border); }
+.clear-btn:hover { color: var(--text) !important; border-color: var(--text2); }
+
+/* LEGEND */
+.legend { display: flex; gap: 12px; flex-wrap: wrap; padding: 8px 0; font-size: 0.8rem; color: var(--text2); }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <h1>Multi-Everything</h1>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="finder-cam">Finder-Cam</button>
+    <button class="tab-btn" data-tab="coming-soon">Feature #2</button>
+  </div>
+</nav>
+
+<!-- MODEL STATUS -->
+<div class="model-status loading" id="modelStatus">Loading AI detection model... (first time may take a few seconds)</div>
+
+<!-- TAB 1: FINDER-CAM -->
+<div id="tab-finder-cam" class="tab-panel active">
+  <div class="finder-cam">
+    <!-- LEFT: Media -->
+    <div class="media-section">
+      <div class="upload-zone" id="uploadZone">
+        <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p class="big">Tap to upload a photo or video</p>
+        <p>or drag & drop</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*,video/*" hidden>
+
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="mainCanvas"></canvas>
+        <video id="mainVideo" hidden playsinline></video>
+        <div class="media-controls" id="mediaControls" style="display:none">
+          <button id="captureFrameBtn">Capture This Frame</button>
+          <button class="clear-btn" id="clearMediaBtn">Remove</button>
+        </div>
+      </div>
+      <div class="media-controls" id="imgControls" style="display:none">
+        <button class="clear-btn" id="clearMediaBtn2">Remove Media</button>
+      </div>
+
+      <div class="loading-bar" id="loadingBar"><div class="fill" id="loadingFill"></div></div>
+      <div class="scan-status" id="scanStatus"></div>
+
+      <div class="legend" id="legend" style="display:none">
+        <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> 100% sure</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#eab308"></div> 50-99%</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div> 1-49%</div>
+      </div>
+
+      <div class="results-panel" id="resultsPanel">
+        <h3>Detection Results</h3>
+        <div id="resultsList"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Checklist -->
+    <div class="checklist-section">
+      <h2>
+        What to Find
+        <span class="selected-count" id="selectedCount">0 selected</span>
+        <button class="select-all-btn" id="selectAllBtn">Select All</button>
+      </h2>
+      <div class="search-box">
+        <svg fill="none" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+        <input type="text" id="searchInput" placeholder="Search items...">
+      </div>
+      <div class="item-list" id="itemList"></div>
+      <div class="custom-input">
+        <input type="text" id="customItemInput" placeholder="Add your own item to look for...">
+        <button id="addCustomBtn">+ Add</button>
+      </div>
+      <p class="info-text">
+        Uses real AI (COCO-SSD) running in your browser. It can detect 80 object types.
+        Items not in the AI's vocabulary will show as "Not in AI model" but are kept for reference.
+      </p>
+      <button class="scan-btn" id="scanBtn">Scan Image</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: COMING SOON -->
+<div id="tab-coming-soon" class="tab-panel">
+  <div class="coming-soon">
+    <div class="coming-soon-card">
+      <div class="icon">🚀</div>
+      <h2>Coming Soon!</h2>
+      <p>Something awesome is in the works. Stay tuned for the next Multi-Everything feature!</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== COCO-SSD LABEL LIST (80 objects the AI can actually detect) =====================
+const COCO_LABELS = [
+  "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
+  "traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat",
+  "dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack",
+  "umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball",
+  "kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket",
+  "bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple",
+  "sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair",
+  "couch","potted plant","bed","dining table","toilet","tv","laptop","mouse",
+  "remote","keyboard","cell phone","microwave","oven","toaster","sink",
+  "refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
+];
+
+// Organized into nice categories for the checklist
+const ITEM_DATABASE = [
+  { category: "People & Accessories", items: ["Person","Backpack","Umbrella","Handbag","Tie","Suitcase"] },
+  { category: "Animals", items: ["Bird","Cat","Dog","Horse","Sheep","Cow","Elephant","Bear","Zebra","Giraffe"] },
+  { category: "Vehicles", items: ["Bicycle","Car","Motorcycle","Airplane","Bus","Train","Truck","Boat"] },
+  { category: "Food", items: ["Banana","Apple","Sandwich","Orange","Broccoli","Carrot","Hot Dog","Pizza","Donut","Cake"] },
+  { category: "Kitchen & Dining", items: ["Bottle","Wine Glass","Cup","Fork","Knife","Spoon","Bowl","Microwave","Oven","Toaster","Sink","Refrigerator"] },
+  { category: "Furniture", items: ["Chair","Couch","Potted Plant","Bed","Dining Table","Toilet"] },
+  { category: "Electronics", items: ["TV","Laptop","Mouse","Remote","Keyboard","Cell Phone"] },
+  { category: "Sports & Outdoors", items: ["Frisbee","Skis","Snowboard","Sports Ball","Kite","Baseball Bat","Baseball Glove","Skateboard","Surfboard","Tennis Racket"] },
+  { category: "Street & Signs", items: ["Traffic Light","Fire Hydrant","Stop Sign","Parking Meter","Bench"] },
+  { category: "Household", items: ["Book","Clock","Vase","Scissors","Teddy Bear","Hair Drier","Toothbrush"] }
+];
+
+// Map display names to COCO labels (lowercase)
+function toCocoLabel(displayName) {
+  return displayName.toLowerCase().replace('tv', 'tv');
+}
+
+// Check if a display name corresponds to a real COCO label
+function isCocoLabel(displayName) {
+  return COCO_LABELS.includes(toCocoLabel(displayName));
+}
+
+// ===================== STATE =====================
+let selectedItems = new Set();
+let uploadedImage = null;
+let uploadedVideo = null;
+let isVideo = false;
+let customItems = [];
+let model = null;
+let modelLoading = true;
+
+// ===================== DOM =====================
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const canvasContainer = document.getElementById('canvasContainer');
+const mainCanvas = document.getElementById('mainCanvas');
+const mainVideo = document.getElementById('mainVideo');
+const mediaControls = document.getElementById('mediaControls');
+const imgControls = document.getElementById('imgControls');
+const ctx = mainCanvas.getContext('2d');
+const searchInput = document.getElementById('searchInput');
+const itemList = document.getElementById('itemList');
+const customItemInput = document.getElementById('customItemInput');
+const addCustomBtn = document.getElementById('addCustomBtn');
+const scanBtn = document.getElementById('scanBtn');
+const loadingBar = document.getElementById('loadingBar');
+const loadingFill = document.getElementById('loadingFill');
+const resultsPanel = document.getElementById('resultsPanel');
+const resultsList = document.getElementById('resultsList');
+const selectedCount = document.getElementById('selectedCount');
+const modelStatus = document.getElementById('modelStatus');
+const scanStatus = document.getElementById('scanStatus');
+const legend = document.getElementById('legend');
+const selectAllBtn = document.getElementById('selectAllBtn');
+
+// ===================== DYNAMIC SCRIPT LOADER WITH FALLBACKS =====================
+function loadScript(urls) {
+  // urls is an array of fallback URLs to try in order
+  return new Promise((resolve, reject) => {
+    let idx = 0;
+    function tryNext() {
+      if (idx >= urls.length) { reject(new Error('All CDN sources failed')); return; }
+      const script = document.createElement('script');
+      script.src = urls[idx];
+      script.crossOrigin = 'anonymous';
+      script.onload = resolve;
+      script.onerror = () => { idx++; tryNext(); };
+      document.head.appendChild(script);
+    }
+    tryNext();
+  });
+}
+
+// ===================== LOAD MODEL =====================
+async function loadModel() {
+  try {
+    modelStatus.textContent = 'Loading AI scripts... (step 1/2)';
+    modelStatus.className = 'model-status loading';
+
+    // Load TensorFlow.js with fallback CDNs
+    await loadScript([
+      'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+      'https://unpkg.com/@tensorflow/tfjs@4.17.0/dist/tf.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.17.0/tf.min.js'
+    ]);
+
+    modelStatus.textContent = 'Loading AI model... (step 2/2, ~5MB)';
+
+    // Load COCO-SSD with fallback CDNs
+    await loadScript([
+      'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js',
+      'https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js'
+    ]);
+
+    // Now load the actual model
+    modelStatus.textContent = 'Initializing AI brain... (almost done)';
+    model = await cocoSsd.load();
+    modelStatus.textContent = 'AI model ready! Upload an image and scan.';
+    modelStatus.className = 'model-status ready';
+    modelLoading = false;
+    setTimeout(() => { modelStatus.style.display = 'none'; }, 3000);
+  } catch (err) {
+    console.error('Model load error:', err);
+    modelStatus.innerHTML = 'Failed to load AI model. <button onclick="location.reload()" style="background:#7c3aed;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;margin-left:8px">Retry</button>';
+    modelStatus.className = 'model-status error';
+  }
+}
+loadModel();
+
+// ===================== TABS =====================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ===================== FILE UPLOAD =====================
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(file) {
+  clearResults();
+  const url = URL.createObjectURL(file);
+
+  if (file.type.startsWith('video/')) {
+    isVideo = true;
+    mainVideo.src = url;
+    mainVideo.hidden = false;
+    mainVideo.controls = true;
+    mainCanvas.hidden = true;
+    mediaControls.style.display = 'flex';
+    imgControls.style.display = 'none';
+    canvasContainer.style.display = 'block';
+    uploadZone.style.display = 'none';
+    uploadedVideo = mainVideo;
+    uploadedImage = null;
+  } else {
+    isVideo = false;
+    const img = new Image();
+    img.onload = () => {
+      drawImageToCanvas(img);
+      uploadedImage = { img, w: img.naturalWidth, h: img.naturalHeight };
+      mainCanvas.hidden = false;
+      mainVideo.hidden = true;
+      mediaControls.style.display = 'none';
+      imgControls.style.display = 'flex';
+      canvasContainer.style.display = 'block';
+      uploadZone.style.display = 'none';
+    };
+    img.src = url;
+    uploadedVideo = null;
+  }
+}
+
+function drawImageToCanvas(source) {
+  let w, h;
+  if (source instanceof HTMLVideoElement) {
+    w = source.videoWidth;
+    h = source.videoHeight;
+  } else {
+    w = source.naturalWidth;
+    h = source.naturalHeight;
+  }
+  // Scale down for display but keep full resolution for detection
+  const maxW = Math.min(canvasContainer.clientWidth || 800, 1200);
+  let dispW = w, dispH = h;
+  if (dispW > maxW) { dispH = dispH * (maxW / dispW); dispW = maxW; }
+
+  mainCanvas.width = w;
+  mainCanvas.height = h;
+  mainCanvas.style.width = dispW + 'px';
+  mainCanvas.style.height = dispH + 'px';
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(source, 0, 0, w, h);
+}
+
+document.getElementById('captureFrameBtn').addEventListener('click', () => {
+  if (!uploadedVideo) return;
+  const v = uploadedVideo;
+  drawImageToCanvas(v);
+  mainCanvas.hidden = false;
+  mainVideo.hidden = true;
+  uploadedImage = { img: null, w: v.videoWidth, h: v.videoHeight, videoSource: v };
+});
+
+function clearMedia() {
+  uploadedImage = null;
+  uploadedVideo = null;
+  isVideo = false;
+  mainVideo.src = '';
+  canvasContainer.style.display = 'none';
+  uploadZone.style.display = 'flex';
+  mediaControls.style.display = 'none';
+  imgControls.style.display = 'none';
+  clearResults();
+  fileInput.value = '';
+}
+document.getElementById('clearMediaBtn').addEventListener('click', clearMedia);
+document.getElementById('clearMediaBtn2').addEventListener('click', clearMedia);
+
+// ===================== CHECKLIST =====================
+function renderChecklist() {
+  const filter = searchInput.value.toLowerCase();
+  itemList.innerHTML = '';
+
+  // Custom items first
+  const allCustom = customItems.filter(it => it.toLowerCase().includes(filter));
+  if (allCustom.length > 0) {
+    const group = document.createElement('div');
+    group.className = 'category-group';
+    const hdr = document.createElement('div');
+    hdr.className = 'category-header';
+    hdr.innerHTML = '<span class="arrow">\u25BC</span> Custom Items';
+    hdr.addEventListener('click', () => hdr.classList.toggle('collapsed'));
+    group.appendChild(hdr);
+    const items = document.createElement('div');
+    items.className = 'category-items';
+    allCustom.forEach(name => items.appendChild(makeCheckbox(name, !isCocoLabel(name))));
+    group.appendChild(items);
+    itemList.appendChild(group);
+  }
+
+  ITEM_DATABASE.forEach(cat => {
+    const filtered = cat.items.filter(it => it.toLowerCase().includes(filter));
+    if (filtered.length === 0 && !cat.category.toLowerCase().includes(filter)) return;
+    const show = filtered.length > 0 ? filtered : cat.items;
+
+    const group = document.createElement('div');
+    group.className = 'category-group';
+    const hdr = document.createElement('div');
+    hdr.className = 'category-header';
+    hdr.innerHTML = `<span class="arrow">\u25BC</span> ${cat.category} (${show.length})`;
+    hdr.addEventListener('click', () => hdr.classList.toggle('collapsed'));
+    group.appendChild(hdr);
+    const items = document.createElement('div');
+    items.className = 'category-items';
+    show.forEach(name => items.appendChild(makeCheckbox(name, false)));
+    group.appendChild(items);
+    itemList.appendChild(group);
+  });
+}
+
+function makeCheckbox(name, notInModel) {
+  const label = document.createElement('label');
+  label.className = 'item-check';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = selectedItems.has(name);
+  cb.addEventListener('change', () => {
+    if (cb.checked) selectedItems.add(name);
+    else selectedItems.delete(name);
+    updateCount();
+  });
+  label.appendChild(cb);
+  const text = document.createTextNode(name);
+  label.appendChild(text);
+  if (notInModel) {
+    const tag = document.createElement('span');
+    tag.style.cssText = 'font-size:0.7rem;color:#666;margin-left:4px';
+    tag.textContent = '(custom)';
+    label.appendChild(tag);
+  }
+  return label;
+}
+
+function updateCount() {
+  selectedCount.textContent = selectedItems.size + ' selected';
+}
+
+// Select All / Deselect All
+selectAllBtn.addEventListener('click', () => {
+  const allItems = [];
+  ITEM_DATABASE.forEach(cat => cat.items.forEach(it => allItems.push(it)));
+  customItems.forEach(it => allItems.push(it));
+
+  if (selectedItems.size === allItems.length) {
+    selectedItems.clear();
+    selectAllBtn.textContent = 'Select All';
+  } else {
+    allItems.forEach(it => selectedItems.add(it));
+    selectAllBtn.textContent = 'Deselect All';
+  }
+  updateCount();
+  renderChecklist();
+});
+
+searchInput.addEventListener('input', renderChecklist);
+
+addCustomBtn.addEventListener('click', () => {
+  const val = customItemInput.value.trim();
+  if (!val) return;
+  if (!customItems.includes(val)) customItems.push(val);
+  selectedItems.add(val);
+  customItemInput.value = '';
+  updateCount();
+  renderChecklist();
+});
+customItemInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCustomBtn.click(); });
+
+// ===================== REAL AI DETECTION =====================
+function getConfidenceColor(pct) {
+  if (pct === 100) return '#22c55e';
+  if (pct >= 50) return '#eab308';
+  return '#ef4444';
+}
+
+function drawBoundingBoxes(detections, filterSet) {
+  if (!uploadedImage) return;
+
+  const w = mainCanvas.width;
+  const h = mainCanvas.height;
+
+  // Redraw the original image
+  if (uploadedImage.img) {
+    ctx.drawImage(uploadedImage.img, 0, 0, w, h);
+  } else if (uploadedImage.videoSource) {
+    ctx.drawImage(uploadedImage.videoSource, 0, 0, w, h);
+  }
+
+  // Scale font relative to image size
+  const fontSize = Math.max(14, Math.min(w * 0.025, 28));
+
+  detections.forEach(det => {
+    const pct = Math.round(det.score * 100);
+    const color = getConfidenceColor(pct);
+    const [x, y, bw, bh] = det.bbox;
+
+    // Draw bounding box
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, w * 0.004);
+    ctx.strokeRect(x, y, bw, bh);
+
+    // Semi-transparent fill
+    ctx.fillStyle = color + '18';
+    ctx.fillRect(x, y, bw, bh);
+
+    // Label
+    const labelName = det.class.charAt(0).toUpperCase() + det.class.slice(1);
+    const label = `${labelName} (${pct}%)`;
+    ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
+    const textW = ctx.measureText(label).width + 12;
+    const textH = fontSize + 10;
+    const lx = x;
+    const ly = Math.max(textH, y) - textH;
+
+    // Label background
+    ctx.fillStyle = color;
+    ctx.fillRect(lx, ly, textW, textH);
+
+    // Label text
+    ctx.fillStyle = '#000';
+    ctx.fillText(label, lx + 6, ly + fontSize + 2);
+  });
+}
+
+function renderResultsSummary(detections, selectedSet) {
+  resultsPanel.style.display = 'block';
+  resultsList.innerHTML = '';
+
+  // Group detections by class
+  const foundClasses = new Set(detections.map(d => d.class));
+
+  // Build results: items that were found
+  const results = [];
+
+  detections.forEach(det => {
+    const pct = Math.round(det.score * 100);
+    const name = det.class.charAt(0).toUpperCase() + det.class.slice(1);
+    results.push({ name, confidence: pct, found: true });
+  });
+
+  // Items selected but not found
+  selectedSet.forEach(item => {
+    const cocoName = toCocoLabel(item);
+    if (!foundClasses.has(cocoName)) {
+      const notInModel = !COCO_LABELS.includes(cocoName);
+      results.push({ name: item, confidence: 0, found: false, notInModel });
+    }
+  });
+
+  // Sort: found first (by confidence desc), then not found
+  results.sort((a, b) => {
+    if (a.found !== b.found) return b.found - a.found;
+    return b.confidence - a.confidence;
+  });
+
+  results.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'result-item' + (r.found ? '' : ' not-found');
+
+    if (r.found) {
+      const color = getConfidenceColor(r.confidence);
+      div.innerHTML = `
+        <span class="conf-dot" style="background:${color}"></span>
+        <span class="result-name">${r.name}</span>
+        <div class="conf-bar" style="background:${color}33"><div style="width:${r.confidence}%;height:100%;background:${color};border-radius:3px"></div></div>
+        <span class="conf-text">${r.confidence}%</span>
+      `;
+    } else {
+      div.innerHTML = `
+        <span class="conf-dot" style="background:#555"></span>
+        <span class="result-name">${r.name}</span>
+        <span class="conf-text" style="flex:1;text-align:left;color:#666">${r.notInModel ? 'Not in AI model' : 'Not detected'}</span>
+      `;
+    }
+    resultsList.appendChild(div);
+  });
+}
+
+function clearResults() {
+  resultsPanel.style.display = 'none';
+  resultsList.innerHTML = '';
+  scanStatus.style.display = 'none';
+  legend.style.display = 'none';
+}
+
+// ===================== SCAN =====================
+scanBtn.addEventListener('click', async () => {
+  if (!model) {
+    alert('AI model is still loading. Please wait a moment and try again!');
+    return;
+  }
+  if (!uploadedImage) {
+    alert('Please upload an image or capture a video frame first!');
+    return;
+  }
+  if (selectedItems.size === 0) {
+    alert('Please select at least one item to find!');
+    return;
+  }
+
+  scanBtn.disabled = true;
+  scanBtn.textContent = 'Scanning...';
+  loadingBar.classList.add('active');
+  loadingFill.style.width = '10%';
+  scanStatus.style.display = 'block';
+  scanStatus.textContent = 'Running AI detection on your image...';
+  clearResults();
+  scanStatus.style.display = 'block';
+
+  // Small delay to let UI update
+  await new Promise(r => setTimeout(r, 50));
+  loadingFill.style.width = '40%';
+
+  try {
+    // Run REAL detection using COCO-SSD!
+    const predictions = await model.detect(mainCanvas);
+
+    loadingFill.style.width = '80%';
+    await new Promise(r => setTimeout(r, 100));
+
+    // Filter detections to only show items the user checked
+    const selectedLabels = new Set();
+    selectedItems.forEach(item => selectedLabels.add(toCocoLabel(item)));
+
+    const filtered = predictions.filter(p => selectedLabels.has(p.class));
+
+    loadingFill.style.width = '100%';
+    await new Promise(r => setTimeout(r, 200));
+
+    // Draw boxes and show results
+    drawBoundingBoxes(filtered, selectedItems);
+    renderResultsSummary(filtered, selectedItems);
+
+    legend.style.display = 'flex';
+
+    const totalFound = filtered.length;
+    const totalSelected = selectedItems.size;
+    scanStatus.textContent = `Found ${totalFound} object${totalFound !== 1 ? 's' : ''} out of ${totalSelected} selected item${totalSelected !== 1 ? 's' : ''}.`;
+
+  } catch (err) {
+    console.error('Detection error:', err);
+    scanStatus.textContent = 'Detection failed. Try again.';
+  }
+
+  loadingBar.classList.remove('active');
+  scanBtn.disabled = false;
+  scanBtn.textContent = 'Scan Image';
+});
+
+// ===================== INIT =====================
+renderChecklist();
+</script>
+</body>
+</html>
